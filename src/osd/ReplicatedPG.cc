@@ -5889,8 +5889,10 @@ void ReplicatedPG::finish_ctx(OpContext *ctx, int log_op_type, bool maintain_ssc
     pg_info_t& pinfo = peer_info[bt];
     if (soid <= pinfo.last_backfill)
       pinfo.stats.stats.add(ctx->delta_stats);
-    else if (soid <= last_backfill_started)
+    else if (soid <= last_backfill_started) {
+      dout(20) << __func__ << " pending_backfill_updates set " << soid << dendl;
       pending_backfill_updates[soid].stats.add(ctx->delta_stats);
+    }
   }
 
   if (!scrub_ok && scrubber.active) {
@@ -8992,6 +8994,7 @@ void ReplicatedPG::_clear_recovery_state()
     }
   }
   assert(backfills_in_flight.empty());
+  dout(20) << __func__ << " pending_backfill_updates clear" << dendl;
   pending_backfill_updates.clear();
   assert(recovering.empty());
   pgbackend->clear_recovery_state();
@@ -9841,6 +9844,7 @@ int ReplicatedPG::recover_backfill(
     ObjectContextRef obc = get_object_context(*i, false);
     pg_stat_t stat;
     add_object_context_to_pg_stat(obc, &stat);
+    dout(20) << __func__ << " pending_backfill_updates set " << *i << dendl;
     pending_backfill_updates[*i] = stat;
   }
   for (unsigned i = 0; i < to_remove.size(); ++i) {
@@ -9849,6 +9853,7 @@ int ReplicatedPG::recover_backfill(
     // ordered before any subsequent updates
     send_remove_op(to_remove[i].get<0>(), to_remove[i].get<1>(), to_remove[i].get<2>());
 
+    dout(20) << __func__ << " pending_backfill_updates set toremove " << to_remove[i].get<0>() << dendl;
     pending_backfill_updates[to_remove[i].get<0>()]; // add empty stat!
   }
 
@@ -9875,6 +9880,7 @@ int ReplicatedPG::recover_backfill(
        i != pending_backfill_updates.end() &&
 	 i->first < next_backfill_to_complete;
        pending_backfill_updates.erase(i++)) {
+    dout(20) << __func__ << " pending_backfill_updates do " << i->first << dendl;
     assert(i->first > new_last_backfill);
     for (set<pg_shard_t>::iterator j = backfill_targets.begin();
 	 j != backfill_targets.end();
